@@ -1,0 +1,23 @@
+<resources>
+    <!-- Базовый стиль приложения -->
+    <style name="bz4.trams" parent="Theme.AppCompat.Light.DarkActionBar">
+        <!-- Цвет фона приложения -->
+        <item name="android:windowBackground">@color/white</item>
+
+        <!-- Цвет панели действий -->
+        <item name="colorPrimary">@color/colorPrimary</item>
+
+        <!-- Цвет текста и значков на панели действий -->
+        <item name="android:textColorPrimary">@color/white</item>
+
+        <!-- Цвет статус-бара (верхней полосы состояния) -->
+        <item name="android:statusBarColor">@color/colorPrimaryDark</item>
+
+        <!-- Цвет акцента (например, для подчеркивания, выделения и т. д.) -->
+        <item name="colorAccent">@color/colorAccent</item>
+
+        <!-- Остальные настройки стиля -->
+    </style>
+
+    <!-- Другие стили, если есть -->
+</resources>
