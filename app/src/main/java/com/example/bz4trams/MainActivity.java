@@ -1,9 +1,16 @@
 package com.example.bz4trams;
 
+import android.annotation.SuppressLint;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Bundle;
+import android.os.Handler;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.DisplayMetrics;
 import android.view.MotionEvent;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -14,23 +21,53 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-    private TextView textViewLineName;
+
     private ImageView imageViewLine;
-    private ListView listViewStations;
-
-    private List<Line> lineList;
+    private TextView textViewLineName;
+    private EditText editTextSearch;
+    private ListView listViewResults;
+    private StationsDatabaseHelper databaseHelper;
+    private SQLiteDatabase database;
+    private ArrayAdapter<String> adapter;
+    private List<String> stationsList;
     private Line currentLine;
+    private List<Line> lineList;
+    private ListView listViewStations;
+    private boolean isSearching = false;
+    private Handler handler = new Handler();
+    private static final int SEARCH_DELAY = 600;
+    private String currentQuery = "";
+    List<String> filteredStationsList = new ArrayList<>();
 
+
+
+
+    @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+
+
         textViewLineName = findViewById(R.id.textViewLineName);
         imageViewLine = findViewById(R.id.imageViewLine);
+        editTextSearch = findViewById(R.id.editTextSearch);
+        EditText searchEditText = findViewById(R.id.editTextSearch);
+        listViewResults = findViewById(R.id.listViewResults);
         listViewStations = findViewById(R.id.listViewStations);
 
-// Создание списка линий
+        // Инициализация базы данных и списка станций
+        databaseHelper = new StationsDatabaseHelper(this);
+        database = databaseHelper.getReadableDatabase();
+        stationsList = new ArrayList<>();
+
+        // Создание адаптера и привязка его к ListView
+        adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, stationsList);
+        listViewResults.setAdapter(adapter);
+
+        // Обработка изменений текста в поле поиска
+
         lineList = new ArrayList<>();
 
 
@@ -299,13 +336,10 @@ public class MainActivity extends AppCompatActivity {
 
         currentLine = line2;
 
-
         // Получение данных о начальной линии
         String lineName = currentLine.getName();
         int lineImageResourceId = getResources().getIdentifier("lane" + currentLine.getLineNumber(), "drawable", getPackageName());
         String[] stationList1 = currentLine.getStationList().toArray(new String[0]);
-
-
 
         // Получение ширины экрана
         DisplayMetrics displayMetrics = new DisplayMetrics();
@@ -324,9 +358,78 @@ public class MainActivity extends AppCompatActivity {
         ArrayAdapter<String> stationListAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, stationList1);
         listViewStations.setAdapter(stationListAdapter);
 
+        editTextSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
 
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
 
+            @Override
+            public void afterTextChanged(Editable s) {
+                if (!isSearching) {
+                    // Выполняем поиск только если мы не находимся в режиме поиска
+                    searchStations(s.toString());
+                }
+            }
+        });
     }
+    public void setStationsList(List<String> stationsList) {
+        this.stationsList = stationsList;
+    }
+    private void searchStations(final String query) {
+        // Выполняем запрос к базе данных с учетом введенного запроса поиска
+        String selection = "station_name LIKE ?";
+        String[] selectionArgs = { "%" + query + "%" };
+        Cursor cursor = database.query("stations", null, selection, selectionArgs, null, null, null);
+
+        if (cursor != null && cursor.moveToFirst()) {
+            // Очищаем список перед добавлением новых элементов
+            stationsList.clear();
+
+            // Получаем результаты
+            do {
+                @SuppressLint("Range") String stationName = cursor.getString(cursor.getColumnIndex("station_name"));
+                stationsList.add(stationName);
+            } while (cursor.moveToNext());
+
+            cursor.close();
+        }
+
+        // Обновляем адаптер с новыми результатами
+        adapter.notifyDataSetChanged();
+    }
+
+
+
+
+    // Инициализация TextWatcher
+    private void initTextWatcher() {
+        EditText searchEditText = findViewById(R.id.editTextSearch);
+        searchEditText.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+                // Не используется, оставляем пустым
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                // Вызываем поиск станций с новым запросом
+                String query = s.toString().trim();
+                searchStations(query);
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+                // Не используется, оставляем пустым
+            }
+        });
+    }
+
+
+
 
 
 
@@ -368,6 +471,7 @@ public class MainActivity extends AppCompatActivity {
         updateUI();
     }
 
+
     private void switchToPreviousLine() {
         int currentIndex = lineList.indexOf(currentLine);
         int previousIndex = (currentIndex - 1 + lineList.size()) % lineList.size();
@@ -375,6 +479,7 @@ public class MainActivity extends AppCompatActivity {
 
         updateUI();
     }
+
 
     private void updateUI() {
         // Обновление информации о текущей линии
@@ -389,5 +494,24 @@ public class MainActivity extends AppCompatActivity {
         // Обновление списка станций
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, stationList);
         listViewStations.setAdapter(adapter);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (isSearching) {
+            editTextSearch.setText(""); // Очищаем поле ввода
+            isSearching = false;
+            stationsList.clear();
+            adapter.notifyDataSetChanged();
+        } else {
+            super.onBackPressed(); // Вызываем стандартное действие при нажатии кнопки "Назад"
+        }
+    }
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Закрытие базы данных при завершении активности
+        database.close();
+        databaseHelper.close();
     }
 }
